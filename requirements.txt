@@ -1,0 +1,6 @@
+
+future
+numpy>=1.11
+gym>=0.3
+pillow>=4.0.0
+pandas>=0.17
