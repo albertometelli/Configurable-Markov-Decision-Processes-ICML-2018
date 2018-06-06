@@ -44,6 +44,7 @@ class RaceTrackConfigurableEnv(discrete.DiscreteEnv):
         # ----- Conf-MDP CONSTRUCTION -----
         # ---------------------------------
 
+        self.reward_weight = reward_weight
         self.horizon = horizon
         self.gamma = 0.9
 
@@ -70,6 +71,14 @@ class RaceTrackConfigurableEnv(discrete.DiscreteEnv):
         mu /= mu.sum()
         self.mu = mu
 
+        # Reward vector
+        R = np.zeros(nS)
+        # reward vector computation
+        for s in range(nS):
+            (x, y, vx, vy) = self._i_to_s(s)
+            R[s] = self._reward_state(x, y, vx, vy, reward_weight)
+        self.R = R
+
         # Transition Model
         self.P = {s: {a: [] for a in range(nA)} for s in range(nS)}
         self.P_sas = np.zeros(shape=(nS, nA, nS))
@@ -95,274 +104,8 @@ class RaceTrackConfigurableEnv(discrete.DiscreteEnv):
         self.P_highspeed_boost = {s: {a: [] for a in range(nA)} for s in range(nS)}
         self.P_lowspeed_boost = {s: {a: [] for a in range(nA)} for s in range(nS)}
 
-        # reward computation
-        def rstate(x, y, vx, vy, weight):
-            if x == -1:
-                return self.reward_fail_abs
-            if weight is None:
-                weight = [1, 0, 0, 0, 0]
-            type = track[x, y]
-            speed = vx ** 2 + vy ** 2
-            isGoal = type == '2'
-            isOffroad = type == '3'
-            isOnTrack = type == '5'
-            isZeroSpeed = speed == 0
-            isLowSpeed = speed < 2
-            isHighSpeed = speed >= 2
-            basis = np.array([isGoal, isOffroad, isZeroSpeed and isOnTrack,
-                     isLowSpeed and isOnTrack, isHighSpeed and isOnTrack]).astype('float64')
-            reward = np.dot(basis, weight)
-            return reward
-
-        # state validity checking
-        def check_valid(x, y):
-            valid = True
-            # check isOutOfBound
-            if x < 0 or x >= nrow or y < 0 or y >= ncol:
-                valid = False
-            # check isBlank
-            elif track[x, y] == ' ':
-                valid = False
-            # check isWall
-            elif track[x, y] == '4':
-                valid = False
-            return valid
-
-        # path validity checking
-        def check_path(x1, y1, x2, y2):
-            valid = True
-            step = 0.1
-            A = np.array([x1, y1])
-            B = np.array([x2, y2])
-            for k in np.arange(step, 1., step):
-                p = k * B + (1-k) * A
-                p = np.floor(p).astype(int)
-                if check_valid(p[0], p[1]):
-                    valid = False
-            return valid
-
-        # next state computation
-        def next_s(x, y, vx, vy, a, outcome):
-            if a == 0 or outcome == 0:  # keep or failed action
-                nvx = vx
-                nvy = vy
-                nx = x + nvx
-                ny = y + nvy
-            else:
-                if a == 1:  # increment x
-                    nvx = vx + 1
-                    nvy = vy
-                    nx = x + nvx
-                    ny = y + nvy
-                elif a == 2:  # increment y
-                    nvx = vx
-                    nvy = vy + 1
-                    nx = x + nvx
-                    ny = y + nvy
-                elif a == 3:  # decrement x
-                    nvx = vx - 1
-                    nvy = vy
-                    nx = x + nvx
-                    ny = y + nvy
-                elif a == 4:  # decrement y
-                    nvx = vx
-                    nvy = vy - 1
-                    nx = x + nvx
-                    ny = y + nvy
-            # check validity of the next state
-            if not check_valid(nx, ny):
-                return (x, y, 0, 0)
-            # check the validity of the path
-            elif check_path(x + 0.5, y + 0.5, nx + 0.5, ny):
-                return (x, y, 0, 0)
-            elif check_path(x + 0.5, y + 0.5, nx, ny + 0.5):
-                return (x, y, 0, 0)
-            elif check_path(x + 0.5, y + 0.5, nx, ny):
-                return (x, y, 0, 0)
-            elif check_path(x + 0.5, y + 0.5, nx + 0.5, ny + 0.5):
-                return (x, y, 0, 0)
-            # return of the validated next state
-            return (nx, ny, nvx, nvy)
-
-        # method to check if the node to be added refers to a new state,
-        # if it refers to a new state then append
-        # else update the probability of the node with the same state
-        def append_if_new(t_list, node):
-            found = -1
-            for i in range(len(t_list)):
-                if t_list[i][1] == node[1]:
-                    found = i
-                    break
-            if found == -1:
-                t_list.append(node)
-            else:
-                t_list[i] = (t_list[i][0] + node[0], t_list[i][1], t_list[i][2], t_list[i][3])
-
-        # populate the transition probability matrix
-        # failed actions as random actions
-        def fill_p_failed_as_random():
-
-            # filling the value of the vertex models
-            for [x, y] in lin:
-                for vx in vel:
-                    for vy in vel:
-                        s = self._s_to_i(x, y, vx, vy)
-                        speed = vx ** 2 + vy ** 2
-
-                        valid_actions = self._valid_a(vx, vy)
-                        actions = np.zeros(nA, dtype=int)
-                        actions[valid_actions] = valid_actions
-                        actions_nb = self._valid_a_noboost(vx, vy)
-                        # Tying to perform an invalid action is like doing nothing
-
-                        for a_index, a_value in enumerate(actions):
-                            li_hs_nb = self.P_highspeed_noboost[s][a_index]
-                            li_ls_nb = self.P_lowspeed_noboost[s][a_index]
-                            li_hs_b = self.P_highspeed_boost[s][a_index]
-                            li_ls_b = self.P_lowspeed_boost[s][a_index]
-                            type = track[x, y]
-                            if type == '2':  # if s is goal state
-                                li_hs_nb.append((1.0, s, 0, True))
-                                li_ls_nb.append((1.0, s, 0, True))
-                                li_hs_b.append((1.0, s, 0, True))
-                                li_ls_b.append((1.0, s, 0, True))
-                            else:
-                                if a_value in actions_nb:
-
-                                    # SUCCEED ACTION TRANSITION
-                                    (nx, ny, nvx, nvy) = next_s(x, y, vx, vy, a_value, 1)
-                                    ns = self._s_to_i(nx, ny, nvx, nvy)
-                                    ntype = track[nx, ny]
-                                    reward = rstate(nx, ny, nvx, nvy, reward_weight)
-                                    done = (ntype == '2')
-                                    psuc_hs = min_psuc + ((max_psuc - min_psuc) / max_speed) * speed
-                                    psuc_ls = max_psuc2 - ((max_psuc2 - min_psuc2) / max_speed) * speed
-                                    append_if_new(li_hs_nb, (psuc_hs, ns, reward, done))
-                                    append_if_new(li_ls_nb, (psuc_ls, ns, reward, done))
-
-
-                                    #Fail also with no boost
-                                    append_if_new(li_hs_b, (psuc_hs*(1-pfail), ns, reward, done))
-                                    append_if_new(li_ls_b, (psuc_ls*(1-pfail), ns, reward, done))
-
-                                    append_if_new(li_hs_b, (psuc_hs * pfail, nS-1, 0., True))
-                                    append_if_new(li_ls_b, (psuc_ls * pfail, nS-1, 0., True))
-
-                                    append_if_new(li_hs_nb, (0., nS - 1, 0., True))
-                                    append_if_new(li_ls_nb, (0., nS - 1, 0., True))
-
-                                    # FAILED ACTION TRANSITIONS
-                                    pins_hs = 1 - psuc_hs
-                                    pins_ls = 1 - psuc_ls
-                                    a_fail = np.array(list(set(actions_nb) - set([a_value, 0])))
-
-                                    for a in a_fail:
-                                        (nx, ny, nvx, nvy) = next_s(x, y, vx, vy, a, 1)
-                                        ns = self._s_to_i(nx, ny, nvx, nvy)
-                                        ntype = track[nx, ny]
-                                        reward = rstate(nx, ny, nvx, nvy, reward_weight)
-                                        done = (ntype == '2')
-                                        prob_hs = pins_hs / len(a_fail)
-                                        prob_ls = pins_ls / len(a_fail)
-                                        append_if_new(li_hs_nb, (prob_hs, ns, reward, done))
-                                        append_if_new(li_ls_nb, (prob_ls, ns, reward, done))
-                                        append_if_new(li_hs_b, (prob_hs, ns, reward, done))
-                                        append_if_new(li_ls_b, (prob_ls, ns, reward, done))
-                                else:
-
-                                    # SUCCEED ACTION TRANSITIONS
-                                    psuc_hs = min_psuc + ((max_psuc - min_psuc) / max_speed) * speed
-                                    psuc_ls = max_psuc2 - ((max_psuc2 - min_psuc2) / max_speed) * speed
-
-                                    # no boost state
-                                    (nx, ny, nvx, nvy) = next_s(x, y, vx, vy, 0, 1)
-                                    ns_nb = self._s_to_i(nx, ny, nvx, nvy)
-                                    ntype_nb = track[nx, ny]
-                                    done_nb = (ntype_nb == '2')
-                                    reward_nb = rstate(nx, ny, nvx, nvy, reward_weight)
-
-                                    # boost state
-                                    (nxb, nyb, nvxb, nvyb) = next_s(x, y, vx, vy, a_value, 1)
-                                    ns_b = self._s_to_i(nxb, nyb, nvxb, nvyb)
-                                    ntype_b = track[nxb, nyb]
-                                    done_b = (ntype_b == '2')
-                                    reward_b = rstate(nxb, nyb, nvxb, nvyb, reward_weight)
-
-                                    # failure state
-                                    ns_f = self.nS - 1
-                                    done_f = True
-                                    reward_f = self.reward_fail_abs
-
-                                    pins_hs_b = pins_ls_b = pins_hs_nb = pins_ls_nb = 1.
-
-                                    # high speed boost
-                                    prob_b = psuc_hs * max_pboost * (1. - pfail)
-                                    prob_f = psuc_hs * max_pboost * pfail
-                                    prob_nb = psuc_hs * (1 - max_pboost)
-                                    pins_hs_b = pins_hs_b - prob_b - prob_f - prob_nb
-                                    append_if_new(li_hs_b, (prob_b, ns_b, reward_b, done_b))
-                                    append_if_new(li_hs_b, (prob_f, ns_f, reward_f, done_f))
-                                    append_if_new(li_hs_b, (prob_nb, ns_nb, reward_nb, done_nb))
-
-                                    # low speed boost
-                                    prob_b = psuc_ls * max_pboost * (1. - pfail)
-                                    prob_f = psuc_ls * max_pboost * pfail
-                                    prob_nb = psuc_ls * (1 - max_pboost)
-                                    pins_ls_b = pins_ls_b - prob_b - prob_f - prob_nb
-                                    append_if_new(li_ls_b, (prob_b, ns_b, reward_b, done_b))
-                                    append_if_new(li_ls_b, (prob_f, ns_f, reward_f, done_f))
-                                    append_if_new(li_ls_b, (prob_nb, ns_nb, reward_nb, done_nb))
-
-                                    # high speed no boost
-                                    prob_b = psuc_hs * min_pboost * (1. - pfail)
-                                    prob_f = psuc_hs * min_pboost * pfail
-                                    prob_nb = psuc_hs * (1 - min_pboost)
-                                    pins_hs_nb = pins_hs_nb - prob_b - prob_f - prob_nb
-                                    append_if_new(li_hs_nb, (prob_b, ns_b, reward_b, done_b))
-                                    append_if_new(li_hs_nb, (prob_f, ns_f, reward_f, done_f))
-                                    append_if_new(li_hs_nb, (prob_nb, ns_nb, reward_nb, done_nb))
-
-                                    # low speed no boost
-                                    prob_b = psuc_ls * min_pboost * (1. - pfail)
-                                    prob_f = psuc_ls * min_pboost * pfail
-                                    prob_nb = psuc_ls * (1 - min_pboost)
-                                    pins_ls_nb = pins_ls_nb - prob_b - prob_f - prob_nb
-                                    append_if_new(li_ls_nb, (prob_b, ns_b, reward_b, done_b))
-                                    append_if_new(li_ls_nb, (prob_f, ns_f, reward_f, done_f))
-                                    append_if_new(li_ls_nb, (prob_nb, ns_nb, reward_nb, done_nb))
-
-
-                                    # FAILED ACTION TRANSITIONS
-                                    a_fail = np.array(list(set(actions_nb) - set([a_value, 0])))
-                                    for a in a_fail:
-                                        (nx, ny, nvx, nvy) = next_s(x, y, vx, vy, a, 1)
-                                        ns = self._s_to_i(nx, ny, nvx, nvy)
-                                        ntype = track[nx, ny]
-                                        reward = rstate(nx, ny, nvx, nvy, reward_weight)
-                                        done = (ntype == '2')
-                                        prob_hs_b = pins_hs_b / len(a_fail)
-                                        prob_ls_b = pins_ls_b / len(a_fail)
-                                        prob_hs_nb = pins_hs_nb / len(a_fail)
-                                        prob_ls_nb = pins_ls_nb / len(a_fail)
-                                        append_if_new(li_hs_nb, (prob_hs_nb, ns, reward, done))
-                                        append_if_new(li_ls_nb, (prob_ls_nb, ns, reward, done))
-                                        append_if_new(li_hs_b, (prob_hs_b, ns, reward, done))
-                                        append_if_new(li_ls_b, (prob_ls_b, ns, reward, done))
-
-
-            for a_index, a_value in enumerate(actions):
-                li_hs_nb = self.P_highspeed_noboost[self.nS - 1][a_index]
-                li_ls_nb = self.P_lowspeed_noboost[self.nS - 1][a_index]
-                li_hs_b = self.P_highspeed_boost[self.nS - 1][a_index]
-                li_ls_b = self.P_lowspeed_boost[self.nS - 1][a_index]
-                li_hs_nb.append((1., self.nS - 1, self.reward_fail_abs, True))
-                li_ls_nb.append((1., self.nS - 1, self.reward_fail_abs, True))
-                li_hs_b.append((1., self.nS - 1, self.reward_fail_abs, True))
-                li_ls_b.append((1., self.nS - 1, self.reward_fail_abs, True))
-
-
         # vertex P matrix population
-        fill_p_failed_as_random()
+        self._build_P()
         # instantiation of model rep for vertex models
         self.P_highspeed_noboost_sas = self._p_sas(self.P_highspeed_noboost)
         self.P_highspeed_noboost_sa = self._p_sa(self.P_highspeed_noboost_sas)
@@ -381,20 +124,282 @@ class RaceTrackConfigurableEnv(discrete.DiscreteEnv):
         self.model_vector = np.array(initial_configuration)
         self.P = P = self.model_configuration(self.k)
 
-        # Reward vector
-        R = np.zeros(nS)
-        # reward vector computation
-        for s in range(nS):
-            (x, y, vx, vy) = self._i_to_s(s)
-            R[s] = rstate(x, y, vx, vy, reward_weight)
-        self.R = R
-
         # call the init method of the super class (Discrete)
         super(RaceTrackConfigurableEnv, self).__init__(nS, nA, P, isd)
+
+
+
+
+
+    # --------------------------------------
+    # ----- METHOD TO BUILD P MATRICES -----
+    # --------------------------------------
+
+    # populate the transition probability matrix
+    # failed actions as random actions
+    def _build_P(self):
+
+        # filling the value of the vertex models
+        for [x, y] in self.lin:
+            for vx in self.vel:
+                for vy in self.vel:
+                    s = self._s_to_i(x, y, vx, vy)
+                    speed = vx ** 2 + vy ** 2
+
+                    valid_actions = self._valid_a(vx, vy)
+                    actions = np.zeros(self.nA, dtype=int)
+                    actions[valid_actions] = valid_actions
+                    actions_nb = self._valid_a_noboost(vx, vy)
+                    # Tying to perform an invalid action is like doing nothing
+
+                    for a_index, a_value in enumerate(actions):
+                        li_hs_nb = self.P_highspeed_noboost[s][a_index]
+                        li_ls_nb = self.P_lowspeed_noboost[s][a_index]
+                        li_hs_b = self.P_highspeed_boost[s][a_index]
+                        li_ls_b = self.P_lowspeed_boost[s][a_index]
+                        type = self.track[x, y]
+                        if type == '2':  # if s is goal state
+                            li_hs_nb.append((1.0, s, 0, True))
+                            li_ls_nb.append((1.0, s, 0, True))
+                            li_hs_b.append((1.0, s, 0, True))
+                            li_ls_b.append((1.0, s, 0, True))
+                        else:
+                            if a_value in actions_nb:
+
+                                # SUCCEED ACTION TRANSITION
+                                (nx, ny, nvx, nvy) = self._next_state(x, y, vx, vy, a_value, 1)
+                                ns = self._s_to_i(nx, ny, nvx, nvy)
+                                ntype = self.track[nx, ny]
+                                reward = self._reward_state(nx, ny, nvx, nvy, self.reward_weight)
+                                done = (ntype == '2')
+                                psuc_hs = self.min_psuc + ((self.max_psuc - self.min_psuc) / self.max_speed) * speed
+                                psuc_ls = self.max_psuc2 - ((self.max_psuc2 - self.min_psuc2) / self.max_speed) * speed
+                                self._append_if_new(li_hs_nb, (psuc_hs, ns, reward, done))
+                                self._append_if_new(li_ls_nb, (psuc_ls, ns, reward, done))
+
+                                # Fail also with no boost
+                                self._append_if_new(li_hs_b, (psuc_hs * (1 - self.pfail), ns, reward, done))
+                                self._append_if_new(li_ls_b, (psuc_ls * (1 - self.pfail), ns, reward, done))
+
+                                self._append_if_new(li_hs_b, (psuc_hs * self.pfail, self.nS - 1, 0., True))
+                                self._append_if_new(li_ls_b, (psuc_ls * self.pfail, self.nS - 1, 0., True))
+
+                                self._append_if_new(li_hs_nb, (0., self.nS - 1, 0., True))
+                                self._append_if_new(li_ls_nb, (0., self.nS - 1, 0., True))
+
+                                # FAILED ACTION TRANSITIONS
+                                pins_hs = 1 - psuc_hs
+                                pins_ls = 1 - psuc_ls
+                                a_fail = np.array(list(set(actions_nb) - set([a_value, 0])))
+
+                                for a in a_fail:
+                                    (nx, ny, nvx, nvy) = self._next_state(x, y, vx, vy, a, 1)
+                                    ns = self._s_to_i(nx, ny, nvx, nvy)
+                                    ntype = self.track[nx, ny]
+                                    reward = self._reward_state(nx, ny, nvx, nvy, self.reward_weight)
+                                    done = (ntype == '2')
+                                    prob_hs = pins_hs / len(a_fail)
+                                    prob_ls = pins_ls / len(a_fail)
+                                    self._append_if_new(li_hs_nb, (prob_hs, ns, reward, done))
+                                    self._append_if_new(li_ls_nb, (prob_ls, ns, reward, done))
+                                    self._append_if_new(li_hs_b, (prob_hs, ns, reward, done))
+                                    self._append_if_new(li_ls_b, (prob_ls, ns, reward, done))
+                            else:
+
+                                # SUCCEED ACTION TRANSITIONS
+                                psuc_hs = self.min_psuc + ((self.max_psuc - self.min_psuc) / self.max_speed) * speed
+                                psuc_ls = self.max_psuc2 - ((self.max_psuc2 - self.min_psuc2) / self.max_speed) * speed
+
+                                # no boost state
+                                (nx, ny, nvx, nvy) = self._next_state(x, y, vx, vy, 0, 1)
+                                ns_nb = self._s_to_i(nx, ny, nvx, nvy)
+                                ntype_nb = self.track[nx, ny]
+                                done_nb = (ntype_nb == '2')
+                                reward_nb = self._reward_state(nx, ny, nvx, nvy, self.reward_weight)
+
+                                # boost state
+                                (nxb, nyb, nvxb, nvyb) = self._next_state(x, y, vx, vy, a_value, 1)
+                                ns_b = self._s_to_i(nxb, nyb, nvxb, nvyb)
+                                ntype_b = self.track[nxb, nyb]
+                                done_b = (ntype_b == '2')
+                                reward_b = self._reward_state(nxb, nyb, nvxb, nvyb, self.reward_weight)
+
+                                # failure state
+                                ns_f = self.nS - 1
+                                done_f = True
+                                reward_f = self.reward_fail_abs
+
+                                pins_hs_b = pins_ls_b = pins_hs_nb = pins_ls_nb = 1.
+
+                                # high speed boost
+                                prob_b = psuc_hs * self.max_pboost * (1. - self.pfail)
+                                prob_f = psuc_hs * self.max_pboost * self.pfail
+                                prob_nb = psuc_hs * (1 - self.max_pboost)
+                                pins_hs_b = pins_hs_b - prob_b - prob_f - prob_nb
+                                self._append_if_new(li_hs_b, (prob_b, ns_b, reward_b, done_b))
+                                self._append_if_new(li_hs_b, (prob_f, ns_f, reward_f, done_f))
+                                self._append_if_new(li_hs_b, (prob_nb, ns_nb, reward_nb, done_nb))
+
+                                # low speed boost
+                                prob_b = psuc_ls * self.max_pboost * (1. - self.pfail)
+                                prob_f = psuc_ls * self.max_pboost * self.pfail
+                                prob_nb = psuc_ls * (1 - self.max_pboost)
+                                pins_ls_b = pins_ls_b - prob_b - prob_f - prob_nb
+                                self._append_if_new(li_ls_b, (prob_b, ns_b, reward_b, done_b))
+                                self._append_if_new(li_ls_b, (prob_f, ns_f, reward_f, done_f))
+                                self._append_if_new(li_ls_b, (prob_nb, ns_nb, reward_nb, done_nb))
+
+                                # high speed no boost
+                                prob_b = psuc_hs * self.min_pboost * (1. - self.pfail)
+                                prob_f = psuc_hs * self.min_pboost * self.pfail
+                                prob_nb = psuc_hs * (1 - self.min_pboost)
+                                pins_hs_nb = pins_hs_nb - prob_b - prob_f - prob_nb
+                                self._append_if_new(li_hs_nb, (prob_b, ns_b, reward_b, done_b))
+                                self._append_if_new(li_hs_nb, (prob_f, ns_f, reward_f, done_f))
+                                self._append_if_new(li_hs_nb, (prob_nb, ns_nb, reward_nb, done_nb))
+
+                                # low speed no boost
+                                prob_b = psuc_ls * self.min_pboost * (1. - self.pfail)
+                                prob_f = psuc_ls * self.min_pboost * self.pfail
+                                prob_nb = psuc_ls * (1 - self.min_pboost)
+                                pins_ls_nb = pins_ls_nb - prob_b - prob_f - prob_nb
+                                self._append_if_new(li_ls_nb, (prob_b, ns_b, reward_b, done_b))
+                                self._append_if_new(li_ls_nb, (prob_f, ns_f, reward_f, done_f))
+                                self._append_if_new(li_ls_nb, (prob_nb, ns_nb, reward_nb, done_nb))
+
+                                # FAILED ACTION TRANSITIONS
+                                a_fail = np.array(list(set(actions_nb) - set([a_value, 0])))
+                                for a in a_fail:
+                                    (nx, ny, nvx, nvy) = self._next_state(x, y, vx, vy, a, 1)
+                                    ns = self._s_to_i(nx, ny, nvx, nvy)
+                                    ntype = self.track[nx, ny]
+                                    reward = self._reward_state(nx, ny, nvx, nvy, self.reward_weight)
+                                    done = (ntype == '2')
+                                    prob_hs_b = pins_hs_b / len(a_fail)
+                                    prob_ls_b = pins_ls_b / len(a_fail)
+                                    prob_hs_nb = pins_hs_nb / len(a_fail)
+                                    prob_ls_nb = pins_ls_nb / len(a_fail)
+                                    self._append_if_new(li_hs_nb, (prob_hs_nb, ns, reward, done))
+                                    self._append_if_new(li_ls_nb, (prob_ls_nb, ns, reward, done))
+                                    self._append_if_new(li_hs_b, (prob_hs_b, ns, reward, done))
+                                    self._append_if_new(li_ls_b, (prob_ls_b, ns, reward, done))
+
+        for a_index, a_value in enumerate(actions):
+            li_hs_nb = self.P_highspeed_noboost[self.nS - 1][a_index]
+            li_ls_nb = self.P_lowspeed_noboost[self.nS - 1][a_index]
+            li_hs_b = self.P_highspeed_boost[self.nS - 1][a_index]
+            li_ls_b = self.P_lowspeed_boost[self.nS - 1][a_index]
+            li_hs_nb.append((1., self.nS - 1, self.reward_fail_abs, True))
+            li_ls_nb.append((1., self.nS - 1, self.reward_fail_abs, True))
+            li_hs_b.append((1., self.nS - 1, self.reward_fail_abs, True))
+            li_ls_b.append((1., self.nS - 1, self.reward_fail_abs, True))
 
     # ---------------------------
     # ----- SUPPORT METHODS -----
     # ---------------------------
+
+    # reward computation
+    def _reward_state(self, x, y, vx, vy, weight):
+        if x == -1:
+            return self.reward_fail_abs
+        if weight is None:
+            weight = [1, 0, 0, 0, 0]
+        type = self.track[x, y]
+        speed = vx ** 2 + vy ** 2
+        isGoal = type == '2'
+        isOffroad = type == '3'
+        isOnTrack = type == '5'
+        isZeroSpeed = speed == 0
+        isLowSpeed = speed < 2
+        isHighSpeed = speed >= 2
+        basis = np.array([isGoal, isOffroad, isZeroSpeed and isOnTrack,
+                          isLowSpeed and isOnTrack, isHighSpeed and isOnTrack]).astype('float64')
+        reward = np.dot(basis, weight)
+        return reward
+
+    # state validity checking
+    def _check_valid_state(self, x, y):
+        valid = True
+        # check isOutOfBound
+        if x < 0 or x >= self.nrow or y < 0 or y >= self.ncol:
+            valid = False
+        # check isBlank
+        elif self.track[x, y] == ' ':
+            valid = False
+        # check isWall
+        elif self.track[x, y] == '4':
+            valid = False
+        return valid
+
+    # path validity checking
+    def _check_valid_path(self, x1, y1, x2, y2):
+        valid = True
+        step = 0.1
+        A = np.array([x1, y1])
+        B = np.array([x2, y2])
+        for k in np.arange(step, 1., step):
+            p = k * B + (1 - k) * A
+            p = np.floor(p).astype(int)
+            if self._check_valid_state(p[0], p[1]):
+                valid = False
+        return valid
+
+    # method to check if the node to be added refers to a new state,
+    # if it refers to a new state then append
+    # else update the probability of the node with the same state
+    def _append_if_new(self, t_list, node):
+        found = -1
+        for i in range(len(t_list)):
+            if t_list[i][1] == node[1]:
+                found = i
+                break
+        if found == -1:
+            t_list.append(node)
+        else:
+            t_list[i] = (t_list[i][0] + node[0], t_list[i][1], t_list[i][2], t_list[i][3])
+
+    # next state computation
+    def _next_state(self, x, y, vx, vy, a, outcome):
+        if a == 0 or outcome == 0:  # keep or failed action
+            nvx = vx
+            nvy = vy
+            nx = x + nvx
+            ny = y + nvy
+        else:
+            if a == 1:  # increment x
+                nvx = vx + 1
+                nvy = vy
+                nx = x + nvx
+                ny = y + nvy
+            elif a == 2:  # increment y
+                nvx = vx
+                nvy = vy + 1
+                nx = x + nvx
+                ny = y + nvy
+            elif a == 3:  # decrement x
+                nvx = vx - 1
+                nvy = vy
+                nx = x + nvx
+                ny = y + nvy
+            elif a == 4:  # decrement y
+                nvx = vx
+                nvy = vy - 1
+                nx = x + nvx
+                ny = y + nvy
+        # check validity of the next state
+        if not self._check_valid_state(nx, ny):
+            return (x, y, 0, 0)
+        # check the validity of the path
+        elif self._check_valid_path(x + 0.5, y + 0.5, nx + 0.5, ny):
+            return (x, y, 0, 0)
+        elif self._check_valid_path(x + 0.5, y + 0.5, nx, ny + 0.5):
+            return (x, y, 0, 0)
+        elif self._check_valid_path(x + 0.5, y + 0.5, nx, ny):
+            return (x, y, 0, 0)
+        elif self._check_valid_path(x + 0.5, y + 0.5, nx + 0.5, ny + 0.5):
+            return (x, y, 0, 0)
+        # return of the validated next state
+        return (nx, ny, nvx, nvy)
 
     # from (vx,vy) to the set of valid actions
     def _valid_a(self, vx, vy):
@@ -444,6 +449,7 @@ class RaceTrackConfigurableEnv(discrete.DiscreteEnv):
         x, y = self.lin[s_lin]
         return (x, y, vx, vy)
 
+    # method to load and convert the track file
     def _load_convert_csv(self, track_file):
         dir_path = os.path.dirname(os.path.realpath(__file__))
         path = dir_path + '/tracks/' + track_file + '.csv'

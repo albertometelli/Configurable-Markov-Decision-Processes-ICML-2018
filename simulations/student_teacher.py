@@ -42,32 +42,32 @@ spmi = SPMI(mdp, eps, policy_chooser, model_chooser, max_iter=30000, persistent=
 #SPMI
 spmi.spmi(initial_policy, initial_model)
 
-spmi._logger_save(dir_path, 'spmi.csv')
+spmi.logger.save(dir_path, 'spmi.csv')
 
 #-------------------------------------------------------------------------------
 #SPMI-sup
 mdp.set_model(original_model)
 spmi.spmi_sup(initial_policy, initial_model)
 
-spmi._logger_save(dir_path, 'spmi_sup.csv')
+spmi.logger.save(dir_path, 'spmi_sup.csv')
 
 #-------------------------------------------------------------------------------
 #SPMI-alt
 mdp.set_model(original_model)
 spmi.spmi_alt(initial_policy, initial_model)
 
-spmi._logger_save(dir_path, 'spmi_alt.csv')
+spmi.logger.save(dir_path, 'spmi_alt.csv')
 
 #-------------------------------------------------------------------------------
 #SPI+SMI
 mdp.set_model(original_model)
 spmi.spi_smi(initial_policy, initial_model)
 
-spmi._logger_save(dir_path, 'spi_smi.csv')
+spmi.logger.save(dir_path, 'spi_smi.csv')
 
 #-------------------------------------------------------------------------------
 #SMI+SPI
 mdp.set_model(original_model)
 spmi.smi_spi(initial_policy, initial_model)
 
-spmi._logger_save(dir_path, 'smi_spi.csv')
+spmi.logger.save(dir_path, 'smi_spi.csv')

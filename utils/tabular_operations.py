@@ -65,3 +65,15 @@ def model_mean_tv_distance(P1_sa, P2_sa, delta_mu):
     P1_sa_matrix = P1_sa.get_matrix()
     P2_sa_matrix = P2_sa.get_matrix()
     return np.dot(delta_mu, (np.sum(np.abs(P1_sa_matrix - P2_sa_matrix), axis=1)))
+
+# method to check the equivalence of two given policies
+def policy_equiv_check(policy1, policy2):
+    policy1_matrix = policy1.get_matrix()
+    policy2_matrix = policy2.get_matrix()
+    return np.array_equal(policy1_matrix, policy2_matrix)
+
+# method to check the equivalence of two given models
+def model_equiv_check(model1, model2):
+    model1_matrix = model1.get_matrix()
+    model2_matrix = model2.get_matrix()
+    return np.array_equal(model1_matrix, model2_matrix)
