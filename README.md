@@ -2,10 +2,10 @@
 
 This repository contains the code to run the experiments of the paper "Configurable Markov Decision Processes"
 
-Paper: http://proceedings.mlr.press/v80/metelli18a/metelli18a.pdf
-Supplementary material: http://proceedings.mlr.press/v80/metelli18a/metelli18a-supp.pdf
-Poster: TBD
-Slides: TBD
+- Paper: http://proceedings.mlr.press/v80/metelli18a/metelli18a.pdf
+- Supplementary material: http://proceedings.mlr.press/v80/metelli18a/metelli18a-supp.pdf
+- Poster: https://albertometelli.github.io/download/poster_icml2018.pdf
+- Slides: TBD
 
 
 To cite this repository in publications:
