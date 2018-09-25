@@ -1,15 +1,17 @@
 
 from utils.tabular import *
 from algorithm.model_chooser import *
+from algorithm.policy_chooser import *
 from utils.tabular_operations import policy_equiv_check, model_equiv_check
 
 
 class Logger(object):
 
-    def __init__(self, mdp, model_chooser):
+    def __init__(self, mdp, model_chooser, policy_chooser=None):
 
         self.mdp = mdp
         self.model_chooser = model_chooser
+        self.policy_chooser = policy_chooser
 
         # LOGGING ATTRIBUTES
         self.count = 0
@@ -26,10 +28,13 @@ class Logger(object):
         self.betas = list()
         self.w_target = list()
         self.w_current = list()
+        self.theta_target = list()
+        self.theta_current = list()
         self.p_change = list()
         self.m_change = list()
         self.bound = list()
         self.average_rewards = list()
+        self.policy_vector = None
 
     # method to collect the execution data and to print the log trace,
     # it also updates the model_vector in the mdp representation for parametric model spaces
@@ -110,6 +115,31 @@ class Logger(object):
                 target_vector[:] = np.nan
                 self.w_target.append(target_vector)
 
+        # policy vector coefficients computation and print
+        if isinstance(self.policy_chooser, SetPolicyChooser) and len(self.policy_chooser.policy_set) == 2:
+            policy_vector = self.policy_vector
+            policy_set = self.policy_chooser.policy_set
+            n_policies = len(policy_vector)
+            if isinstance(target_policy, TabularPolicy):
+                for i in range(n_policies):
+                    if policy_equiv_check(policy_set[i], target_policy):
+                        target_index = i
+                        break
+                target_vector = np.zeros(n_policies)
+                target_vector[target_index] = 1
+                new_policy_vector = alfa_star * target_vector + (1 - alfa_star) * policy_vector
+                self.policy_vector = new_policy_vector
+
+                print('\ntarget_policy: {0}'.format(target_vector))
+                print('current_policy: {0}'.format(new_policy_vector))
+                self.theta_current.append(new_policy_vector)
+                self.theta_target.append(target_vector)
+            else:
+                self.theta_current.append(policy_vector)
+                target_vector = np.empty(n_policies)
+                target_vector[:] = np.nan
+                self.theta_target.append(target_vector)
+
         # iteration update
         self.iteration = self.iteration + 1
 
@@ -176,6 +206,18 @@ class Logger(object):
                                   current[:, 2], current[:, 3],
                                   target[:, 0], target[:, 1],
                                   target[:, 2], target[:, 3]]
+
+        if self.policy_chooser is not None and isinstance(self.policy_chooser, SetPolicyChooser):
+
+            if len(self.policy_chooser.policy_set) == 2:
+                header_string = header_string + ';theta_current[0];theta_current[1];theta_target[0];theta_target[1]'
+
+                current = np.array(self.theta_current)
+                target = np.array(self.theta_target)
+
+                execution_data += [
+                                  current[:, 0], current[:, 1],
+                                  target[:, 0], target[:, 1]]
 
         execution_data = np.array(execution_data).T
 

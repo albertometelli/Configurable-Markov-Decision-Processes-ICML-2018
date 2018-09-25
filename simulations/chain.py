@@ -45,6 +45,7 @@ model_chooser = SetModelChooser(model_set, mdp.nS, mdp.nA)
 
 eps = 0.0
 spmi = SPMI(mdp, eps, policy_chooser, model_chooser, max_iter=10000, persistent=True)
+spmi.logger.policy_vector = np.array([0.5, 0.5])
 
 #-------------------------------------------------------------------------------
 #SPMI

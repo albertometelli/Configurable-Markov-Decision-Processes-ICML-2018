@@ -59,7 +59,7 @@ class SPMI(object):
             self.model_chooser = model_chooser
 
         # LOGGER INSTANTIATION
-        self.logger = Logger(self.mdp, self.model_chooser)
+        self.logger = Logger(self.mdp, self.model_chooser, self.policy_chooser)
 
     # -------------------------------------
     # ----- ALGORITHMS IMPLEMENTATION -----
