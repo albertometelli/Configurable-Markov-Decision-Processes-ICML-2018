@@ -49,12 +49,14 @@ spmi.logger.policy_vector = np.array([0.5, 0.5])
 
 #-------------------------------------------------------------------------------
 #SPMI
+spmi.logger.policy_vector = np.array([0.5, 0.5])
 spmi.spmi(initial_policy, initial_model)
 
 spmi.logger.save(dir_path, 'spmi.csv')
 
 #-------------------------------------------------------------------------------
 #SPMI-sup
+spmi.logger.policy_vector = np.array([0.5, 0.5])
 mdp.set_initial_configuration(original_model)
 spmi.spmi_sup(initial_policy, initial_model)
 
@@ -62,6 +64,7 @@ spmi.logger.save(dir_path, 'spmi_sup.csv')
 
 #-------------------------------------------------------------------------------
 #SPMI-alt
+spmi.logger.policy_vector = np.array([0.5, 0.5])
 mdp.set_initial_configuration(original_model)
 spmi.spmi_alt(initial_policy, initial_model)
 
@@ -69,6 +72,7 @@ spmi.logger.save(dir_path, 'spmi_alt.csv')
 
 #-------------------------------------------------------------------------------
 #SPI+SMI
+spmi.logger.policy_vector = np.array([0.5, 0.5])
 mdp.set_initial_configuration(original_model)
 spmi.spi_smi(initial_policy, initial_model)
 
@@ -76,6 +80,7 @@ spmi.logger.save(dir_path, 'spi_smi.csv')
 
 #-------------------------------------------------------------------------------
 #SMI+SPI
+spmi.logger.policy_vector = np.array([0.5, 0.5])
 mdp.set_initial_configuration(original_model)
 spmi.smi_spi(initial_policy, initial_model)
 
