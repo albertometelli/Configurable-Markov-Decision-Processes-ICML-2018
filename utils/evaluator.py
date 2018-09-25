@@ -55,6 +55,26 @@ def compute_u_function(policy, model, reward, gamma, nS=None, nA=None, horizon=N
     U = R_sas + gamma * np.repeat([V], nS * nA, axis=0)
     return U
 
+def compute_average_return(policy, model, reward, d_stationary):
+    R_sas = reward.get_matrix()
+    P = model.get_matrix()
+    pi = policy.get_matrix()
+    R_sa = (R_sas * P).sum(axis=1)
+    R_s = np.dot(pi, R_sa)
+
+    return np.dot(d_stationary, R_s)
+
+
+def compute_stationary_distribution(policy, model, nS=None, nA=None):
+    P = model.get_matrix()
+    pi = policy.get_matrix()
+
+    P_pi = np.dot(pi, P)
+    eigvals, eigvecs = la.eig(P_pi.T)
+    idx = np.where(np.isclose(eigvals, 1))[0][0]
+    d = eigvecs[:, idx] / np.sum(eigvecs[:, idx])
+    return d
+
 def compute_performance(mu, reward, policy, model, gamma, horizon=None, nS=None, nA=None):
     V = compute_v_function(policy, model, reward, gamma, nS, nA, horizon)
     return np.dot(mu, V)

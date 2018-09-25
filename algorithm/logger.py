@@ -29,13 +29,14 @@ class Logger(object):
         self.p_change = list()
         self.m_change = list()
         self.bound = list()
+        self.average_rewards = list()
 
     # method to collect the execution data and to print the log trace,
     # it also updates the model_vector in the mdp representation for parametric model spaces
     def update(self, J_p_m, alfa_star, beta_star, p_er_adv, m_er_adv,
                        p_dist_sup, p_dist_mean, m_dist_sup, m_dist_mean,
                        target_policy, target_policy_old, target_model,
-                       target_model_old, convergence, bound):
+                       target_model_old, convergence, bound, average_reward=None):
         # data collections
         self.iterations.append(self.iteration)
         self.evaluations.append(J_p_m)
@@ -48,6 +49,8 @@ class Logger(object):
         self.m_dist_sup.append(m_dist_sup)
         self.m_dist_mean.append(m_dist_mean)
         self.bound.append(bound)
+        if average_reward is not None:
+            self.average_rewards.append(average_reward)
 
         # target policy change check
         if isinstance(target_policy, TabularPolicy):
@@ -64,6 +67,8 @@ class Logger(object):
 
         # trace print
         print('----------------------')
+        if average_reward is not None:
+            print('average reward: {0}'.format(average_reward))
         print('performance: {0}'.format(J_p_m))
         print('alfa/beta: {0}/{1}'.format(alfa_star, beta_star))
         print('bound: {0}'.format(bound))
@@ -127,6 +132,7 @@ class Logger(object):
         self.m_change = list()
         self.w_target = list()
         self.bound = list()
+        self.average_rewards = list()
 
     # logger method to save the execution data into
     # a csv file (directory path as parameter)
@@ -142,6 +148,10 @@ class Logger(object):
                           self.alfas, self.betas, self.p_change,
                           self.m_change, self.bound]
 
+        if len(self.average_rewards) > 0:
+            header_string = header_string + ';average_reward'
+            execution_data.append(self.average_rewards)
+
         if isinstance(self.model_chooser, SetModelChooser):
 
             if len(self.model_chooser.model_set) == 2:
@@ -150,12 +160,7 @@ class Logger(object):
                 current = np.array(self.w_current)
                 target = np.array(self.w_target)
 
-                execution_data = [self.iterations, self.evaluations,
-                                  self.p_advantages, self.m_advantages,
-                                  self.p_dist_sup, self.p_dist_mean,
-                                  self.m_dist_sup, self.m_dist_mean,
-                                  self.alfas, self.betas, self.p_change,
-                                  self.m_change, self.bound,
+                execution_data += [
                                   current[:, 0], current[:, 1],
                                   target[:, 0], target[:, 1]]
 
@@ -166,12 +171,7 @@ class Logger(object):
                 current = np.array(self.w_current)
                 target = np.array(self.w_target)
 
-                execution_data = [self.iterations, self.evaluations,
-                                  self.p_advantages, self.m_advantages,
-                                  self.p_dist_sup, self.p_dist_mean,
-                                  self.m_dist_sup, self.m_dist_mean,
-                                  self.alfas, self.betas, self.p_change,
-                                  self.m_change, self.bound,
+                execution_data += [
                                   current[:, 0], current[:, 1],
                                   current[:, 2], current[:, 3],
                                   target[:, 0], target[:, 1],

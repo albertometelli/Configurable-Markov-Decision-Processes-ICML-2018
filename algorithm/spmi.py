@@ -172,12 +172,20 @@ class SPMI(object):
 
             # performance evaluation
             Q = evaluator.compute_q_function(policy, model, reward, gamma, horizon=horizon)
+
+            d_stationary = evaluator.compute_stationary_distribution(policy, model, nS, nA)
+            average_return = evaluator.compute_average_return(policy, model,reward, d_stationary)
+
+            print(policy.get_matrix())
+            print(model.get_matrix())
+            print(d_stationary)
+
             J_p_m = evaluator.compute_performance(mu, reward, policy, model, gamma, horizon, nS, nA)
 
             self.logger.update(J_p_m, alpha_star, beta_star, p_er_adv_star, m_er_adv_star,
                                 p_dist_sup_star, p_dist_mean_star, m_dist_sup_star, m_dist_mean_star,
                                 target_policy_star, target_policy_old, target_model_star, target_model_old,
-                                convergence, bound_star)
+                                convergence, bound_star, average_return)
 
             # choose the next target policy
             target_policy_old = target_policy_star
@@ -304,10 +312,13 @@ class SPMI(object):
             Q = evaluator.compute_q_function(policy, model, reward, gamma, horizon=horizon)
             J_p_m = evaluator.compute_performance(mu, reward, policy, model, gamma, horizon, nS, nA)
 
+            d_stationary = evaluator.compute_stationary_distribution(policy, model, nS, nA)
+            average_return = evaluator.compute_average_return(policy, model, reward, d_stationary)
+
             self.logger.update(J_p_m, alpha_star, beta_star, p_er_adv_star, m_er_adv_star,
                                 p_dist_sup_star, p_dist_mean_star, m_dist_sup_star, m_dist_mean_star,
                                 target_policy_star, target_policy_old, target_model_star, target_model_old,
-                                convergence, bound_star)
+                                convergence, bound_star, average_return)
 
             # choose the next target policy
             target_policy_old = target_policy_star
@@ -432,10 +443,13 @@ class SPMI(object):
             Q = evaluator.compute_q_function(policy, model, reward, gamma, horizon=horizon)
             J_p_m = evaluator.compute_performance(mu, reward, policy, model, gamma, horizon, nS, nA)
 
+            d_stationary = evaluator.compute_stationary_distribution(policy, model, nS, nA)
+            average_return = evaluator.compute_average_return(policy, model, reward, d_stationary)
+
             self.logger.update(J_p_m, alpha_star, beta_star, p_er_adv_star, m_er_adv_star,
                                 p_dist_sup_star, p_dist_mean_star, m_dist_sup_star, m_dist_mean_star,
                                 target_policy_star, target_policy_old, target_model_star, target_model_old,
-                                convergence, bound_star)
+                                convergence, bound_star, average_return)
 
             # choose the next target policy
             target_policy_old = target_policy_star
@@ -556,10 +570,13 @@ class SPMI(object):
             Q = evaluator.compute_q_function(policy, model, reward, gamma, horizon=horizon)
             J_p_m = evaluator.compute_performance(mu, reward, policy, model, gamma, horizon, nS, nA)
 
+            d_stationary = evaluator.compute_stationary_distribution(policy, model, nS, nA)
+            average_return = evaluator.compute_average_return(policy, model, reward, d_stationary)
+
             self.logger.update(J_p_m, alpha_star, beta_star, p_er_adv_star, m_er_adv_star,
                                 p_dist_sup_star, p_dist_mean_star, m_dist_sup_star, m_dist_mean_star,
                                 target_policy_star, target_policy_old, target_model_star, target_model_old,
-                                convergence, bound_star)
+                                convergence, bound_star, average_return)
 
             # choose the next target policy
             target_policy_old = target_policy_star
@@ -650,10 +667,13 @@ class SPMI(object):
             Q = evaluator.compute_q_function(policy, model, reward, gamma, horizon=horizon)
             J_p_m = evaluator.compute_performance(mu, reward, policy, model, gamma, horizon, nS, nA)
 
+            d_stationary = evaluator.compute_stationary_distribution(policy, model, nS, nA)
+            average_return = evaluator.compute_average_return(policy, model, reward, d_stationary)
+
             self.logger.update(J_p_m, alpha_star, np.nan, p_er_adv_star, np.nan,
                        p_dist_sup_star, p_dist_mean_star, np.nan, np.nan,
                        target_policy_star, target_policy_old, np.nan,
-                       np.nan, convergence, bound_star)
+                       np.nan, convergence, bound_star, average_return)
 
             # choose the next target policy
             target_policy_old = target_policy_star
@@ -714,10 +734,13 @@ class SPMI(object):
             # performance evaluation
             J_p_m = evaluator.compute_performance(mu, reward, policy, model, gamma, horizon, nS, nA)
 
+            d_stationary = evaluator.compute_stationary_distribution(policy, model, nS, nA)
+            average_return = evaluator.compute_average_return(policy, model, reward, d_stationary)
+
             self.logger.update(J_p_m, np.nan, beta_star, np.nan, m_er_adv_star,
                        np.nan, np.nan, m_dist_sup_star, m_dist_mean_star,
                        np.nan, np.nan, target_model_star,
-                       target_model_old, convergence, bound_star)
+                       target_model_old, convergence, bound_star, average_return)
 
             # choose the next target model
             target_model_old = target_model_star
@@ -802,10 +825,13 @@ class SPMI(object):
             # performance evaluation
             J_p_m = evaluator.compute_performance(mu, reward, policy, model, gamma, horizon, nS, nA)
 
+            d_stationary = evaluator.compute_stationary_distribution(policy, model, nS, nA)
+            average_return = evaluator.compute_average_return(policy, model, reward, d_stationary)
+
             self.logger.update(J_p_m, np.nan, beta_star, np.nan, m_er_adv_star,
                        np.nan, np.nan, m_dist_sup_star, m_dist_mean_star,
                        np.nan, np.nan, target_model_star,
-                       target_model_old, convergence, bound_star)
+                       target_model_old, convergence, bound_star, average_return)
 
             # choose the next target model
             target_model_old = target_model_star
@@ -869,10 +895,13 @@ class SPMI(object):
             Q = evaluator.compute_q_function(policy, model, reward, gamma, horizon=horizon)
             J_p_m = evaluator.compute_performance(mu, reward, policy, model, gamma, horizon, nS, nA)
 
+            d_stationary = evaluator.compute_stationary_distribution(policy, model, nS, nA)
+            average_return = evaluator.compute_average_return(policy, model, reward, d_stationary)
+
             self.logger.update(J_p_m, alpha_star, np.nan, p_er_adv_star, np.nan,
                        p_dist_sup_star, p_dist_mean_star, np.nan, np.nan,
                        target_policy_star, target_policy_old, np.nan,
-                       np.nan, convergence, bound_star)
+                       np.nan, convergence, bound_star, average_return)
 
             # choose the next target policy
             target_policy_old = target_policy_star

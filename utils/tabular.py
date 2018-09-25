@@ -55,7 +55,7 @@ class TabularModel(object):
     def draw_action(self, state, action, done):
         next_states = self.model_matrix[np.asscalar(state*self.nA+action)]
         return np.random.choice(range(self.nS), p=next_states)
-        return i
+
 
     def get_rep(self):
         return self.model
