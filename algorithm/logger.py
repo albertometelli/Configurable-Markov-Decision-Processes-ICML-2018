@@ -157,10 +157,12 @@ class Logger(object):
         self.m_dist_mean = list()
         self.alfas = list()
         self.betas = list()
-        self.w_current = list()
         self.p_change = list()
         self.m_change = list()
         self.w_target = list()
+        self.w_current = list()
+        self.theta_target = list()
+        self.theta_current = list()
         self.bound = list()
         self.average_rewards = list()
 
@@ -219,6 +221,7 @@ class Logger(object):
                                   current[:, 0], current[:, 1],
                                   target[:, 0], target[:, 1]]
 
+        print(execution_data)
         execution_data = np.array(execution_data).T
 
         if entries is not None:
